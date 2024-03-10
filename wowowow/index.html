@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #222;
+      color: #fff;
+      font-family: 'Arial', sans-serif;
+    }
+
+    #gameContainer {
+      display: flex;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-right: 20px;
+    }
+
+    canvas {
+      border: 1px solid #fff;
+    }
+
+    #speedControl {
+      margin-top: 10px;
+      width: 100px;
+    }
+
+    #gameOver {
+      display: none;
+      font-size: 24px;
+      margin-top: 20px;
+    }
+
+    #playAgainBtn {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #4CAF50;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="controls">
+      <label for="speedControl">Speed Control:</label>
+      <input id="speedControl" type="range" min="50" max="300" step="50" value="100">
+    </div>
+    <div id="gameBoard">
+      <h2 id="scoreDisplay">Score: 0</h2>
+      <h2 id="highestScoreDisplay">Highest Score: 0</h2>
+      <canvas id="snakeCanvas" width="600" height="600"></canvas>
+      <audio id="eatSound" src="1.mp3"></audio>
+      <audio id="backgroundMusic" src="background.mp3" loop autoplay></audio>
+      <div id="gameOver">Game Over</div>
+      <button id="playAgainBtn">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('snakeCanvas');
+    const ctx = canvas.getContext('2d');
+    const eatSound = document.getElementById('eatSound');
+    const backgroundMusic = document.getElementById('backgroundMusic');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const highestScoreDisplay = document.getElementById('highestScoreDisplay');
+    const speedControl = document.getElementById('speedControl');
+    const gameOverMessage = document.getElementById('gameOver');
+    const playAgainButton = document.getElementById('playAgainBtn');
+
+    const gridSize = 30;
+    const gridColor = '#555';
+
+    let snake = [{ x: 5, y: 5 }];
+    let food = generateFood();
+    let direction = 'right';
+    let score = 0;
+    let highestScore = localStorage.getItem('highestScore') || 0;
+    let gameSpeed = parseInt(speedControl.value);
+    let gameRunning = true;
+
+    function generateFood() {
+      return {
+        x: Math.floor(Math.random() * (canvas.width / gridSize)),
+        y: Math.floor(Math.random() * (canvas.height / gridSize)),
+      };
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = gridColor;
+
+      for (let i = 0; i <= canvas.width; i += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i <= canvas.height; i += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
+    }
+
+    function drawSnake() {
+      const headX = snake[0].x * gridSize;
+      const headY = snake[0].y * gridSize;
+
+      // Draw snake head
+      ctx.fillStyle = '#8B4513'; // Brown color
+      ctx.beginPath();
+      ctx.arc(headX + gridSize / 2, headY + gridSize / 2, gridSize / 2, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw eyes
+      const eyeSize = gridSize / 6;
+      const eyeOffsetX = gridSize / 3;
+      const eyeOffsetY = gridSize / 3;
+
+      const eye1X = headX + eyeOffsetX;
+      const eye1Y = headY + eyeOffsetY;
+
+      const eye2X = headX + 2 * eyeOffsetX;
+      const eye2Y = headY + eyeOffsetY;
+
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(eye1X, eye1Y, eyeSize, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(eye2X, eye2Y, eyeSize, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw pupils based on the direction
+      const pupilSize = eyeSize / 2;
+
+      let pupil1X = eye1X;
+      let pupil1Y = eye1Y;
+
+      let pupil2X = eye2X;
+      let pupil2Y = eye2Y;
+
+      if (direction === 'up') {
+        pupil1Y -= eyeSize / 2;
+        pupil2Y -= eyeSize / 2;
+      } else if (direction === 'down') {
+        pupil1Y += eyeSize / 2;
+        pupil2Y += eyeSize / 2;
+      } else if (direction === 'left') {
+        pupil1X -= eyeSize / 2;
+        pupil2X -= eyeSize / 2;
+      } else if (direction === 'right') {
+        pupil1X += eyeSize / 2;
+        pupil2X += eyeSize / 2;
+      }
+
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(pupil1X, pupil1Y, pupilSize, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(pupil2X, pupil2Y, pupilSize, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw snake body
+      for (let i = 1; i < snake.length; i++) {
+        const bodyX = snake[i].x * gridSize;
+        const bodyY = snake[i].y * gridSize;
+
+        // Draw curved body segments
+        ctx.fillStyle = i % 2 === 0 ? '#006400' : '#000'; // Alternating green and black
+        ctx.beginPath();
+        ctx.arc(bodyX + gridSize / 2, bodyY + gridSize / 2, gridSize / 2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+
+    function drawFood() {
+      // Draw apple shape for food
+      const appleRadius = gridSize / 2;
+      const appleStemHeight = 10;
+
+      ctx.fillStyle = '#f00';
+
+      // Draw apple body
+      ctx.beginPath();
+      ctx.arc(food.x * gridSize + appleRadius, food.y * gridSize + appleRadius, appleRadius, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw apple stem
+      ctx.fillStyle = '#8B4513'; // Brown color for the stem
+      ctx.fillRect(food.x * gridSize + appleRadius - 3, food.y * gridSize - appleStemHeight, 6, appleStemHeight);
+    }
+
+    function draw() {
+      scoreDisplay.textContent = `Score: ${score}`;
+      highestScoreDisplay.textContent = `Highest Score: ${highestScore}`;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawGrid();
+      drawFood();
+      drawSnake();
+
+      if (!gameRunning) {
+        // Show game over message and play again button
+        gameOverMessage.style.display = 'block';
+        playAgainButton.style.display = 'block';
+        backgroundMusic.pause(); // Pause background music on game over
+      }
+    }
+
+    function update() {
+      if (!gameRunning) return;
+
+      const head = { ...snake[0] };
+
+      if (direction === 'up') head.y -= 1;
+      else if (direction === 'down') head.y += 1;
+      else if (direction === 'left') head.x -= 1;
+      else if (direction === 'right') head.x += 1;
+
+      if (head.x < 0 || head.x >= canvas.width / gridSize || head.y < 0 || head.y >= canvas.height / gridSize) {
+        handleGameEnd();
+        return;
+      }
+
+      if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+        handleGameEnd();
+        return;
+      }
+
+      if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        snake.unshift(food);
+        food = generateFood();
+        eatSound.play();
+      } else {
+        snake.pop();
+        snake.unshift(head);
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        localStorage.setItem('highestScore', highestScore);
+      }
+    }
+
+    function handleGameEnd() {
+      gameRunning = false;
+      backgroundMusic.pause(); // Pause background music on game over
+    }
+
+    function resetGame() {
+      snake = [{ x: 5, y: 5 }];
+      food = generateFood();
+      direction = 'right';
+      score = 0;
+      gameRunning = true;
+      gameOverMessage.style.display = 'none';
+      playAgainButton.style.display = 'none';
+      backgroundMusic.currentTime = 0; // Restart background music
+      backgroundMusic.play(); // Play background music on game restart
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      setTimeout(gameLoop, gameSpeed);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (!gameRunning) return;
+
+      if (event.key === 'ArrowUp' && direction !== 'down') direction = 'up';
+      else if (event.key === 'ArrowDown' && direction !== 'up') direction = 'down';
+      else if (event.key === 'ArrowLeft' && direction !== 'right') direction = 'left';
+      else if (event.key === 'ArrowRight' && direction !== 'left') direction = 'right';
+    });
+
+    speedControl.addEventListener('input', () => {
+      gameSpeed = parseInt(speedControl.value);
+    });
+
+    playAgainButton.addEventListener('click', resetGame);
+
+    resetGame();
+    gameLoop();
+  </script>
+</body>
+</html>
